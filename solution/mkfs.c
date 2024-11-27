@@ -13,8 +13,8 @@ static void init_superblock(struct wfs_sb *sb, int raid_mode, int disk_count, in
     sb->num_data_blocks = num_blocks;
     sb->i_bitmap_ptr = sizeof(struct wfs_sb);
     sb->d_bitmap_ptr = sb->i_bitmap_ptr + (num_inodes + 7) / 8;
-    sb->i_blocks_ptr = sb->d_bitmap_ptr + (num_blocks + 7) / 8;
-    sb->d_blocks_ptr = sb->i_blocks_ptr + num_inodes * sizeof(struct wfs_inode);
+    sb->i_blocks_ptr = ((sb->d_bitmap_ptr + (num_blocks + 7) / 8 + BLOCK_SIZE - 1) / BLOCK_SIZE) * BLOCK_SIZE; // Align inode region to block boundary
+    sb->d_blocks_ptr = sb->i_blocks_ptr + (num_inodes * BLOCK_SIZE); // Each inode takes one block
     sb->raid_mode = raid_mode;
     sb->disk_count = disk_count;
 }

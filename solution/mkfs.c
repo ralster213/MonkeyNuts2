@@ -8,13 +8,15 @@
 #include <time.h>
 #include "wfs.h"
 
-static void init_superblock(struct wfs_sb *sb, int num_inodes, int num_blocks) {
+static void init_superblock(struct wfs_sb *sb, int raid_mode, int disk_count, int num_inodes, int num_blocks) {
     sb->num_inodes = num_inodes;
     sb->num_data_blocks = num_blocks;
     sb->i_bitmap_ptr = sizeof(struct wfs_sb);
     sb->d_bitmap_ptr = sb->i_bitmap_ptr + (num_inodes + 7) / 8;
     sb->i_blocks_ptr = sb->d_bitmap_ptr + (num_blocks + 7) / 8;
     sb->d_blocks_ptr = sb->i_blocks_ptr + num_inodes * sizeof(struct wfs_inode);
+    sb->raid_mode = raid_mode;
+    sb->disk_count = disk_count;
 }
 
 static void init_root_inode(struct wfs_inode *root) {
@@ -98,7 +100,7 @@ int main(int argc, char *argv[]) {
         }
 
         struct wfs_sb *sb = (struct wfs_sb *)addr;
-        init_superblock(sb, inode_count, block_count);
+        init_superblock(sb, raid_mode, disk_count, inode_count, block_count);
 
         memset((char *)addr + sb->i_bitmap_ptr, 0, (inode_count + 7) / 8);
         memset((char *)addr + sb->d_bitmap_ptr, 0, (block_count + 7) / 8);

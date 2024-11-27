@@ -71,12 +71,12 @@ int main(int argc, char *argv[]) {
                      block_count * BLOCK_SIZE;                   // data blocks
 
     // Calculate size in MB needed (rounded up)
-    size_t size_in_mb = (fs_size + (1024*1024) - 1) / (1024*1024);
+    size_t size_in_mb = (fs_size + (1024*1024) - 1) / (1024*1024); //50 is a buffer
 
     // Create each disk with calculated size
     char cmd[1024];
     for(int i = 0; i < disk_count; i++) {
-        snprintf(cmd, sizeof(cmd), "./create_disk.sh %s %luM 1", disk_paths[i], size_in_mb);
+        snprintf(cmd, sizeof(cmd), "../solution/create_disk.sh %s %luM 1", disk_paths[i], size_in_mb);
         if(system(cmd) != 0) return -1;
     }
 

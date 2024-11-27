@@ -34,7 +34,7 @@ static void init_root_inode(struct wfs_inode *root) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 11) return -1;
+    //if (argc < 11) return -1;
 
     int raid_mode = -1;
     int inode_count = 0;

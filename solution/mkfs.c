@@ -100,13 +100,13 @@ int main(int argc, char *argv[]) {
         struct wfs_sb *sb = (struct wfs_sb *)addr;
         init_superblock(sb, inode_count, block_count);
 
-        memset(addr + sb->i_bitmap_ptr, 0, (inode_count + 7) / 8);
-        memset(addr + sb->d_bitmap_ptr, 0, (block_count + 7) / 8);
+        memset((char *)addr + sb->i_bitmap_ptr, 0, (inode_count + 7) / 8);
+        memset((char *)addr + sb->d_bitmap_ptr, 0, (block_count + 7) / 8);
 
-        struct wfs_inode *root_inode = (struct wfs_inode *)(addr + sb->i_blocks_ptr);
+        struct wfs_inode *root_inode = (struct wfs_inode *)((char *)addr + sb->i_blocks_ptr);
         init_root_inode(root_inode);
 
-        char *inode_bitmap = addr + sb->i_bitmap_ptr;
+        char *inode_bitmap = (char *)addr + sb->i_bitmap_ptr;
         inode_bitmap[0] |= 1;
 
         msync(addr, fs_size, MS_SYNC);

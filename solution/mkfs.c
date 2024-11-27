@@ -57,12 +57,23 @@ int main(int argc, char *argv[]) {
             block_count = atoi(argv[++i]);
         }
     }
+    printf("Parsed arguments:\n");
+    printf("inode_count: %d\n", inode_count);
+    printf("raid_mode: %d\n", raid_mode);
+    printf("disk_count: %d\n", disk_count);
+    printf("block_count: %d\n", block_count);
 
-    if(raid_mode == -1 || disk_count < 2 || inode_count <= 0 || block_count <= 0) return -1;
-
+    if(raid_mode == -1  || disk_count < 2 || inode_count <= 0 || block_count <= 0) {
+        printf("ERROR: arguments are not valid");
+        return 1;
+    }
     // Align block count to 32
     if(block_count % 32 != 0) {
         block_count += (32 - (block_count % 32));
+    }
+
+    if(inode_count % 32 != 0) {
+        inode_count += (32 - (inode_count % 32));
     }
 
     // Calculate total size needed
@@ -100,6 +111,7 @@ int main(int argc, char *argv[]) {
         }
 
         struct wfs_sb *sb = (struct wfs_sb *)addr;
+        printf("Initializing superblock with num_inodes: %d\n", inode_count);
         init_superblock(sb, raid_mode, disk_count, inode_count, block_count);
 
         memset((char *)addr + sb->i_bitmap_ptr, 0, (inode_count + 7) / 8);

@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
     for(int i = 1; i < argc; i++) {
         if(strcmp(argv[i], "-r") == 0 && i + 1 < argc) {
             raid_mode = atoi(argv[++i]);
-            if(raid_mode != 0 && raid_mode != 1) return -1;
+            if(raid_mode != 0 && raid_mode != 1) return 1;
         }
         else if(strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
             disk_paths[disk_count++] = argv[++i];
@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
             block_count = atoi(argv[++i]);
         }
     }
-    printf("Parsed arguments:\n");
+    printf("DEBUG: Parsed arguments:\n");
     printf("inode_count: %d\n", inode_count);
     printf("raid_mode: %d\n", raid_mode);
     printf("disk_count: %d\n", disk_count);

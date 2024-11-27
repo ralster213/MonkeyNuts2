@@ -19,7 +19,7 @@ static int align_block_count(int blocks) {
 }
 
 static int parse_args(int argc, char *argv[], Config *config) {
-    if (argc < 7) return -1;  // Minimum required arguments
+    if (argc < 11) return -1;  // Minimum required arguments
     
     if (strcmp(argv[1], "-r") != 0) return -1;
     config->raid_mode = atoi(argv[2]);

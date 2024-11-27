@@ -64,6 +64,26 @@ int main(int argc, char *argv[]) {
         numberOfBlocks += (32 - (numberOfBlocks % 32));
     }
 
+    
+
+    //Go through array and init the disks
+
+    //Heirarchy
+    //Superblock
+    //Inode Bitmap
+    //Data Bitmap
+    //Inodes
+    //Data blocks
+
+    //Use create_disk.sh to create a file named disk
+
+
+
+
+
+
+    free(arr);
+
 
 
 

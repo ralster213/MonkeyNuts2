@@ -1,90 +1,74 @@
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+#define MIN_DISKS 2
+#define BLOCK_ALIGNMENT 32
+
+typedef struct {
+    int raid_mode;
+    int inode_count;
+    int block_count;
+    char **disk_paths;
+    int disk_count;
+} Config;
+
+static int align_block_count(int blocks) {
+    if (blocks % BLOCK_ALIGNMENT == 0) return blocks;
+    return blocks + (BLOCK_ALIGNMENT - (blocks % BLOCK_ALIGNMENT));
+}
+
+static int parse_args(int argc, char *argv[], Config *config) {
+    if (argc < 7) return -1;  // Minimum required arguments
+    
+    if (strcmp(argv[1], "-r") != 0) return -1;
+    config->raid_mode = atoi(argv[2]);
+    if (config->raid_mode != 0 && config->raid_mode != 1) return -1;
+
+    config->disk_paths = malloc(sizeof(char*) * argc);
+    if (!config->disk_paths) return -1;
+    
+    int i;
+    for (i = 3; i < argc; i++) {
+        if (strcmp(argv[i], "-d") == 0) {
+            if (i + 1 >= argc) return -1;
+            config->disk_paths[config->disk_count++] = argv[++i];
+        } else if (strcmp(argv[i], "-i") == 0) {
+            if (i + 1 >= argc) return -1;
+            config->inode_count = atoi(argv[++i]);
+            break;
+        }
+    }
+
+    if (config->disk_count < MIN_DISKS) {
+        fprintf(stderr, "Error: only provided %d disks\n", config->disk_count);
+        return -1;
+    }
+
+    if (i >= argc - 2 || strcmp(argv[i + 1], "-b") != 0) return -1;
+    config->block_count = align_block_count(atoi(argv[i + 2]));
+
+    return 0;
+}
 
 int main(int argc, char *argv[]) {
+    Config config = {0};
     
-
-    int raidMode;
-    int inode;
-    int numberOfBlocks;
-
-    if ((strcmp(argv[1], "-r")) != 0) {
+    if (parse_args(argc, argv, &config) != 0) {
+        fprintf(stderr, "Usage: %s -r mode -d disk1 [-d disk2 ...] -i inodes -b blocks\n", argv[0]);
         return -1;
     }
 
-    int raidCheck = argv[2];
+    // TODO: Initialize disks and create file system structure
+    /*
+    File system hierarchy:
+    - Superblock
+    - Inode Bitmap
+    - Data Bitmap
+    - Inodes
+    - Data blocks
+    */
 
-    if ((raidCheck != 0) || (raidCheck != 1)) {
-        return -1;
-    }
-
-    raidMode = argv[2];
-
-    //Do disk stuff here
-
-    int moreDisks = 1;
-    int *arr = malloc(sizeof(int) * argc);
-    int counter = 0;
-    int diskOne = 0; //make sure we have at least one disk
-    int lastDisk = 0;
-
-    //Goes through and finds the locations of the disks
-    while(counter < argc) {
-        if ((strcmp(argv[counter], "-d")) == 0 ) { //we have more disks
-            diskOne = 1; //we have at least one disk
-            counter++;
-            arr[counter] = 1;
-            lastDisk = counter;
-            counter++;
-        }
-        else {
-            counter += 1;
-        }
-    }
-
-    counter++;
-
-    if ((strcmp(argv[counter], "-i")) != 0) {
-        return -1;
-    }
-
-    //Number of inodes can be anything
-    counter++;
-    inode = argv[counter];
-
-
-    counter++;
-    if ((strcmp(argv[counter], "-b")) != 0) {
-        return -1;
-    }
-
-    counter++;
-    int numberOfBlocks = argv[counter];
-
-    if (numberOfBlocks % 32 != 0) {
-        numberOfBlocks += (32 - (numberOfBlocks % 32));
-    }
-
-    
-
-    //Go through array and init the disks
-
-    //Heirarchy
-    //Superblock
-    //Inode Bitmap
-    //Data Bitmap
-    //Inodes
-    //Data blocks
-
-    //Use create_disk.sh to create a file named disk
-
-
-
-
-
-
-    free(arr);
-
-
-
-
+    free(config.disk_paths);
+    return 0;
 }

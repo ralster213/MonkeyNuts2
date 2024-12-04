@@ -91,8 +91,9 @@ static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_
 }
 
 static struct fuse_operations ops = {
-  .getattr = wfs_getattr,
+  
   .mknod   = wfs_mknod,
+  .getattr = wfs_getattr,
   .mkdir   = wfs_mkdir,
   .unlink  = wfs_unlink,
   .rmdir   = wfs_rmdir,

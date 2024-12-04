@@ -163,7 +163,7 @@ int main(int argc, char *argv[]) {
     int fuse_arg_start = 1;    // Where FUSE args begin
 
     // Collect disk paths (they come before any FUSE options)
-    for (int i = 1; i < argc - 1; i++) {
+    for (int i = 1; i < mount_idx; i++) {
         if (argv[i][0] == '-') {
             fuse_arg_start = i;
             break;

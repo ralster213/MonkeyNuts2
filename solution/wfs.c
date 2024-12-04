@@ -139,6 +139,26 @@ static int init_fs(char *disk_paths[], int num_disks) {
     // Use superblock from first disk
     fs_state.sb = (struct wfs_sb *)fs_state.disk_maps[0];
     
+
+    //////////////////////////////////////////
+
+/*
+    size_t num_inodes;
+    size_t num_data_blocks;
+    off_t i_bitmap_ptr;
+    off_t d_bitmap_ptr;
+    off_t i_blocks_ptr;
+    off_t d_blocks_ptr;
+    // Extend after this line
+    int raid_mode;       // 0 for RAID0, 1 for RAID1
+    int disk_count;      // Number of disks in the array
+*/
+
+    printf("Printing tester info\n");
+    printf("Superblock number of inodes: %i", fs_state.sb.num_inodes);
+    printf("Superblock raid mode: %i", fs_state.sb.raid_mode);
+    
+      
     // Verify RAID configuration
     //This isn't verifying the raid configuration, this is verifying that we have the right amount of disks
     if (fs_state.sb->disk_count != num_disks) {

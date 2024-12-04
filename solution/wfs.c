@@ -18,7 +18,7 @@ static int wfs_getattr(const char *path, struct stat *stbuf) {
     // Implementation of getattr function to retrieve file attributes
     // Fill stbuf structure with the attributes of the file/directory indicated by path
     // ...
-    printf("DEBUG: I am here!");
+    printf("DEBUG: I am here!\n");
     return 0; // Return 0 on success
 }
 

@@ -1,3 +1,5 @@
+#define etc 30
+#include <fuse.h>
 #define FUSE_USE_VERSION 30
 #define <errno.h>
 
@@ -6,6 +8,10 @@
 int main(int argc, char *argv[]) {
 
     int diskCount = 0;
+
+    char mount[] = argv[argc - 1];
+
+
     for (int i = 0; i < argc; ++i) {
         //get name of a disk
         if (strcmp(argv[i], 0)) { //replace 0 with the name of a disk

@@ -121,7 +121,7 @@ static int init_fs(char *disk_paths[], int num_disks) {
         }
         
         struct stat st;
-        if (fstat(fs_state.disk_fds[i], &st) == -1) {
+        if (fstat(fs_state.disk_fds[i], &st) == -1) { // stores info about files
             return -1;
         }
         fs_state.disk_size = st.st_size;
@@ -138,6 +138,7 @@ static int init_fs(char *disk_paths[], int num_disks) {
     fs_state.sb = (struct wfs_sb *)fs_state.disk_maps[0];
     
     // Verify RAID configuration
+    //This isn't verifying the raid configuration, this is verifying that we have the right amount of disks
     if (fs_state.sb->disk_count != num_disks) {
         fprintf(stderr, "Error: filesystem requires %d disks but %d provided\n",
                 fs_state.sb->disk_count, num_disks);

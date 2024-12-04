@@ -61,8 +61,9 @@ static int wfs_read(const char* path, char *buf, size_t size, off_t offset, stru
         return 0;
     }
     printf("DEBUG: wfs_read outside if statement!\n");
-    size_t bytes_transfered = 0;
-    return bytes_transfered;
+    //size_t bytes_transfered = 0;
+    //return bytes_transfered;
+    return 0;
 }
 
 static int wfs_write(const char* path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi) {

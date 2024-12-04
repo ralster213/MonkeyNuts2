@@ -11,6 +11,7 @@
 #include <string.h>
 #include <errno.h>
 #include "wfs.h"
+#include <sys/mman.h>
 
 static int wfs_getattr(const char *path, struct stat *stbuf) {
     // Implementation of getattr function to retrieve file attributes

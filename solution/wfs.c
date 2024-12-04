@@ -108,8 +108,100 @@ int main(int argc, char *argv[]) {
 
 //how do we find the disks? We could call ls to list disks
 
-int main(int argc, char *argv[]) {
+// Global filesystem state
+static struct {
+    void **disk_maps;        // Array of mmap'd disk pointers
+    int *disk_fds;           // Array of disk file descriptors
+    int num_disks;           // Number of disks in array
+    size_t disk_size;        // Size of each disk
+    struct wfs_sb *sb;       // Pointer to superblock (on first disk)
+} fs_state;
 
+// Initialize filesystem
+static int init_fs(char *disk_paths[], int num_disks) {
+    fs_state.num_disks = num_disks;
+    fs_state.disk_maps = malloc(sizeof(void *) * num_disks);
+    fs_state.disk_fds = malloc(sizeof(int) * num_disks);
+    
+    // Open and map all disks
+    for (int i = 0; i < num_disks; i++) {
+        fs_state.disk_fds[i] = open(disk_paths[i], O_RDWR);
+        if (fs_state.disk_fds[i] == -1) {
+            return -1;
+        }
+        
+        struct stat st;
+        if (fstat(fs_state.disk_fds[i], &st) == -1) {
+            return -1;
+        }
+        fs_state.disk_size = st.st_size;
+        
+        fs_state.disk_maps[i] = mmap(NULL, fs_state.disk_size, 
+                                    PROT_READ | PROT_WRITE, MAP_SHARED, //check piazza for double check
+                                    fs_state.disk_fds[i], 0);
+        if (fs_state.disk_maps[i] == MAP_FAILED) {
+            return -1;
+        }
+    }
+    
+    // Use superblock from first disk
+    fs_state.sb = (struct wfs_sb *)fs_state.disk_maps[0];
+    
+    // Verify RAID configuration
+    if (fs_state.sb->disk_count != num_disks) {
+        fprintf(stderr, "Error: filesystem requires %d disks but %d provided\n",
+                fs_state.sb->disk_count, num_disks);
+        return -1;
+    }
+    
+    return 0;
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 4) { // Need at least: program_name disk1 mountpoint -s
+        fprintf(stderr, "Usage: %s disk1 [disk2 ...] [FUSE options] mountpoint\n", argv[0]);
+        return 1;
+    }
+
+    // Count disks and find mount point
+    char *disk_paths[16];  // Assuming reasonable maximum
+    int num_disks = 0;
+    int mount_idx = argc - 1;  // Mount point is last argument
+    int fuse_arg_start = 1;    // Where FUSE args begin
+
+    // Collect disk paths (they come before any FUSE options)
+    for (int i = 1; i < argc - 1; i++) {
+        if (argv[i][0] == '-') {
+            fuse_arg_start = i;
+            break;
+        }
+        disk_paths[num_disks] = argv[i];
+	    num_disks++;
+    }
+
+    // Initialize filesystem
+    if (init_fs(disk_paths, num_disks) != 0) {
+        fprintf(stderr, "Failed to initialize filesystem\n");
+        return 1;
+    }
+
+    // Prepare FUSE arguments
+    char *fuse_argv[argc];
+    int fuse_argc = 0;
+
+    // First arg is program name
+    fuse_argv[fuse_argc++] = argv[0];
+
+    // Add all FUSE options
+    for (int i = fuse_arg_start; i < argc; i++) {
+        fuse_argv[fuse_argc++] = argv[i];
+    }
+
+    // Start FUSE
+    return fuse_main(fuse_argc, fuse_argv, &ops, NULL);
+}
+
+/*
     int diskCount = 0;
 
     char mount[] = argv[argc - 1];
@@ -128,7 +220,7 @@ int main(int argc, char *argv[]) {
 
     return 0;
     }
-
+*/
 /*
 If the filesystem was created with N drives, it has to be always mounted with N drives. 
     Otherwise you should report an error and exit with a non-zero exit code. 

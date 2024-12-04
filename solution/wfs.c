@@ -8,6 +8,7 @@
 #define FUSE_USE_VERSION 30
 #include <fuse.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include "wfs.h"
@@ -17,7 +18,7 @@ static int wfs_getattr(const char *path, struct stat *stbuf) {
     // Implementation of getattr function to retrieve file attributes
     // Fill stbuf structure with the attributes of the file/directory indicated by path
     // ...
-
+    printf("DEBUG: I am here!");
     return 0; // Return 0 on success
 }
 
@@ -83,13 +84,13 @@ static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_
 
 static struct fuse_operations ops = {
   .getattr = wfs_getattr,
-  .mknod   = wfs_mknod,
-  .mkdir   = wfs_mkdir,
-  .unlink  = wfs_unlink,
-  .rmdir   = wfs_rmdir,
-  .read    = wfs_read,
-  .write   = wfs_write,
-  .readdir = wfs_readdir,
+//   .mknod   = wfs_mknod,
+//   .mkdir   = wfs_mkdir,
+//   .unlink  = wfs_unlink,
+//   .rmdir   = wfs_rmdir,
+//   .read    = wfs_read,
+//   .write   = wfs_write,
+//   .readdir = wfs_readdir,
 };
 
 

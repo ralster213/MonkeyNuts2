@@ -91,16 +91,6 @@ static struct fuse_operations ops = {
   .readdir = wfs_readdir,
 };
 
-/*
-int main(int argc, char *argv[]) {
-    // Initialize FUSE with specified operations
-    // Filter argc and argv here and then pass it to fuse_main
-    return fuse_main(argc, argv, &ops, NULL);
-}
-
-
-*/
-
 
 //use super block to know disk information
 

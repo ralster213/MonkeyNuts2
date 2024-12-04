@@ -8,6 +8,8 @@
 #include <time.h>
 #include "wfs.h"
 
+
+//TODO make sure this is right
 static void init_superblock(struct wfs_sb *sb, int raid_mode, int disk_count, int num_inodes, int num_blocks) {
     sb->num_inodes = num_inodes;
     sb->num_data_blocks = num_blocks;

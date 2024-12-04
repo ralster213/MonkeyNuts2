@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include "wfs.h"
 
 static int wfs_getattr(const char *path, struct stat *stbuf) {
     // Implementation of getattr function to retrieve file attributes
@@ -73,9 +74,9 @@ static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_
     */
 
    // return -EBADF if the file handle is invalid, or -ENOENT if you use the path argument and the path doesn't exist
-   return 0;
-   // struct dirent directory;
-   //return directory;
+   
+   struct wfs_dentry *directory = wfs_dentry("getNameFromArgs?", 2);
+   return directory;
 
 }
 

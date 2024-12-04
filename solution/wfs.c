@@ -155,8 +155,8 @@ static int init_fs(char *disk_paths[], int num_disks) {
 */
 
     printf("Printing tester info\n");
-    printf("Superblock number of inodes: %ld", fs_state.sb->num_inodes);
-    printf("Superblock raid mode: %i", fs_state.sb->raid_mode);
+    printf("Superblock number of inodes: %ld\n", fs_state.sb->num_inodes);
+    printf("Superblock raid mode: %i\n", fs_state.sb->raid_mode);
     
       
     // Verify RAID configuration

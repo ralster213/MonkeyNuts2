@@ -19,7 +19,7 @@ static int wfs_getattr(const char *path, struct stat *stbuf) {
     // Implementation of getattr function to retrieve file attributes
     // Fill stbuf structure with the attributes of the file/directory indicated by path
     // ...
-    printf("DEBUG: wfs_getattr called for path: %s\n", path);
+    printf("DEBUG 1: wfs_getattr called for path: %s\n", path);
     memset(stbuf, 0, sizeof(struct stat));
     
     if (strcmp(path, "/") == 0) {
@@ -30,7 +30,20 @@ static int wfs_getattr(const char *path, struct stat *stbuf) {
         
         return 0;
     }
-    
+    // Now also handle regular files
+    // DELETE THIS LATER
+    if (path[0] == '/') {  // Make sure it's a valid path
+        printf("DEBUG 2: wfs_getattr called for path[0]: %d\n", path[0]);
+        // For now, pretend any path exists as a regular file
+        // Later we'll properly check if the file exists
+        stbuf->st_mode = S_IFREG | 0666;  // regular file with 644 permissions
+        stbuf->st_nlink = 1;
+        stbuf->st_uid = getuid();
+        stbuf->st_gid = getgid();
+        stbuf->st_size = 0;
+        return 0;
+    }
+    printf("DEBUG 3: wfs_getattr returning -ENOENT (file not found)\n");
     return -ENOENT;
 }
 
@@ -87,8 +100,8 @@ static int wfs_read(const char* path, char *buf, size_t size, off_t offset, stru
 }
 
 static int wfs_write(const char* path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi) {
-    // As for read above, except that it can't return 0.
-    printf("DEBUG: wfs_write!\n");
+    printf("DEBUG: wfs_write called for path: %s, size: %zu, offset: %ld\n", path, size, offset);
+    // For now, pretend we wrote everything successfully
     //size_t bytes_transfered = 0;
     //return bytes_transfered;
     return size;
@@ -111,8 +124,11 @@ static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_
     
     filler(buf, ".", NULL, 0);
     filler(buf, "..", NULL, 0);
-    //struct wfs_dentry *directory = wfs_dentry("getNameFromArgs?", 2);
-    //return directory;
+
+    // For now, if we created a file, show it
+    // Later we'll properly read directory entries
+    filler(buf, "file", NULL, 0);
+
     return 0;
 }
 

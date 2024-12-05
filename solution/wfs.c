@@ -95,7 +95,7 @@ static int wfs_write(const char* path, char *buf, size_t size, off_t offset, str
     printf("DEBUG: wfs_write!\n");
     //size_t bytes_transfered = 0;
     //return bytes_transfered;
-    return 0;
+    return size;
 }
 
 static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi) {

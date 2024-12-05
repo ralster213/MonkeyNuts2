@@ -187,66 +187,60 @@ static int find_free_block() {
 
 // Helper function to add directory entry
 static int add_dir_entry(struct wfs_inode *dir, const char *name, int inode_num) {
-    // First try to find space in existing blocks
+    // Find or allocate a data block in the directory
+    int block_idx = -1;
+    int entry_idx = -1;
+    struct wfs_dentry *entries = NULL;
+
+    // Look for space in existing blocks
     for (int i = 0; i < D_BLOCK && dir->blocks[i]; i++) {
-        struct wfs_dentry *entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
-                                    fs_state.sb->d_blocks_ptr + dir->blocks[i] * BLOCK_SIZE);
+        entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
+                                      fs_state.sb->d_blocks_ptr + dir->blocks[i] * BLOCK_SIZE);
         int num_entries = BLOCK_SIZE / sizeof(struct wfs_dentry);
 
-        // Look for empty entry in existing block
         for (int j = 0; j < num_entries; j++) {
-            if (entries[j].num == 0) {  // Found empty entry
-                strncpy(entries[j].name, name, MAX_NAME - 1);
-                entries[j].name[MAX_NAME - 1] = '\0';
-                entries[j].num = inode_num;
-                
-                // Update directory size if this entry extends it
-                size_t entry_offset = j * sizeof(struct wfs_dentry);
-                if (entry_offset + sizeof(struct wfs_dentry) > dir->size) {
-                    dir->size = entry_offset + sizeof(struct wfs_dentry);
-                }
-                
-                return 0;
+            if (entries[j].num == 0) {  // Found free entry
+                block_idx = i;
+                entry_idx = j;
+                break;
             }
         }
+        if (block_idx != -1) break;
     }
 
-    // If we get here, we need a new block
-    int new_block_idx = -1;
-    for (int i = 0; i < D_BLOCK; i++) {
-        if (dir->blocks[i] == 0) {
-            new_block_idx = i;
-            break;
+    // If no space found, allocate new block
+    if (block_idx == -1) {
+        for (int i = 0; i < D_BLOCK; i++) {
+            if (dir->blocks[i] == 0) {
+                int new_block = find_free_block();
+                if (new_block == -1) return -ENOSPC;
+
+                // Mark block as used
+                char *block_bitmap = (char *)fs_state.disk_maps[0] + fs_state.sb->d_bitmap_ptr;
+                block_bitmap[new_block / 8] |= (1 << (new_block % 8));
+
+                dir->blocks[i] = new_block;
+                block_idx = i;
+                entry_idx = 0;
+                entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
+                                              fs_state.sb->d_blocks_ptr + new_block * BLOCK_SIZE);
+                memset(entries, 0, BLOCK_SIZE);  // Initialize new block
+                break;
+            }
         }
+        if (block_idx == -1) return -ENOSPC;  // No free blocks in directory inode
     }
 
-    if (new_block_idx == -1) {
-        return -ENOSPC;  // No space in directory inode
+    // Add the entry
+    strncpy(entries[entry_idx].name, name, MAX_NAME - 1);
+    entries[entry_idx].name[MAX_NAME - 1] = '\0';
+    entries[entry_idx].num = inode_num;
+
+    // Update directory size if needed
+    size_t new_size = (block_idx + 1) * BLOCK_SIZE;
+    if (new_size > dir->size) {
+        dir->size = new_size;
     }
-
-    int new_block = find_free_block();
-    if (new_block == -1) {
-        return -ENOSPC;
-    }
-
-    // Mark block as used
-    char *block_bitmap = (char *)fs_state.disk_maps[0] + fs_state.sb->d_bitmap_ptr;
-    block_bitmap[new_block / 8] |= (1 << (new_block % 8));
-
-    dir->blocks[new_block_idx] = new_block;
-
-    // Initialize new block
-    struct wfs_dentry *entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
-                                fs_state.sb->d_blocks_ptr + new_block * BLOCK_SIZE);
-    memset(entries, 0, BLOCK_SIZE);
-
-    // Add the entry to the first slot
-    strncpy(entries[0].name, name, MAX_NAME - 1);
-    entries[0].name[MAX_NAME - 1] = '\0';
-    entries[0].num = inode_num;
-
-    // Update directory size
-    dir->size = (new_block_idx + 1) * BLOCK_SIZE;
 
     return 0;
 }
@@ -547,19 +541,22 @@ static int init_fs(char *disk_paths[], int num_disks) {
     for (int i = 0; i < num_disks; i++) {
         fs_state.disk_fds[i] = open(disk_paths[i], O_RDWR);
         if (fs_state.disk_fds[i] == -1) {
+            perror("Failed to open disk");
             return -1;
         }
         
         struct stat st;
-        if (fstat(fs_state.disk_fds[i], &st) == -1) { // stores info about files
+        if (fstat(fs_state.disk_fds[i], &st) == -1) {
+            perror("Failed to stat disk");
             return -1;
         }
         fs_state.disk_size = st.st_size;
         
         fs_state.disk_maps[i] = mmap(NULL, fs_state.disk_size, 
-                                    PROT_READ | PROT_WRITE, MAP_SHARED, //check piazza for double check
+                                    PROT_READ | PROT_WRITE, MAP_SHARED,
                                     fs_state.disk_fds[i], 0);
         if (fs_state.disk_maps[i] == MAP_FAILED) {
+            perror("Failed to mmap disk");
             return -1;
         }
     }
@@ -567,42 +564,77 @@ static int init_fs(char *disk_paths[], int num_disks) {
     // Use superblock from first disk
     fs_state.sb = (struct wfs_sb *)fs_state.disk_maps[0];
     
-
-    //////////////////////////////////////////
-
-/*
-    size_t num_inodes;
-    size_t num_data_blocks;
-    off_t i_bitmap_ptr;
-    off_t d_bitmap_ptr;
-    off_t i_blocks_ptr;
-    off_t d_blocks_ptr;
-    // Extend after this line
-    int raid_mode;       // 0 for RAID0, 1 for RAID1
-    int disk_count;      // Number of disks in the array
-*/
-
-    printf("Printing tester info\n");
-    printf("Superblock number of inodes: %ld\n", fs_state.sb->num_inodes);
-    printf("Superblock raid mode: %i\n", fs_state.sb->raid_mode);
-    
-      
     // Verify RAID configuration
-    //This isn't verifying the raid configuration, this is verifying that we have the right amount of disks
     if (fs_state.sb->disk_count != num_disks) {
         fprintf(stderr, "Error: filesystem requires %d disks but %d provided\n",
                 fs_state.sb->disk_count, num_disks);
         return -1;
     }
+
+    // Get pointer to root inode
+    struct wfs_inode *root_inode = (struct wfs_inode *)((char *)fs_state.disk_maps[0] + 
+                                  fs_state.sb->i_blocks_ptr);
     
+    // Verify root inode setup
+    if (root_inode->num != 0 || !S_ISDIR(root_inode->mode)) {
+        fprintf(stderr, "Error: invalid root inode\n");
+        return -1;
+    }
+
+    // Verify root directory has at least one data block
+    if (root_inode->blocks[0] == 0) {
+        fprintf(stderr, "Error: root directory has no data blocks\n");
+        return -1;
+    }
+
+    // Get root directory entries
+    struct wfs_dentry *root_entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
+                                     fs_state.sb->d_blocks_ptr + root_inode->blocks[0] * BLOCK_SIZE);
+
+    // Verify "." and ".." entries
+    if (strcmp(root_entries[0].name, ".") != 0 || root_entries[0].num != 0 ||
+        strcmp(root_entries[1].name, "..") != 0 || root_entries[1].num != 0) {
+        fprintf(stderr, "Error: invalid root directory entries\n");
+        return -1;
+    }
+
+    printf("Filesystem initialized successfully:\n");
+    printf("- Number of inodes: %zu\n", fs_state.sb->num_inodes);
+    printf("- Number of data blocks: %zu\n", fs_state.sb->num_data_blocks);
+    printf("- RAID mode: %d\n", fs_state.sb->raid_mode);
+    printf("- Number of disks: %d\n", fs_state.sb->disk_count);
+
     return 0;
 }
 
+// Helper function to get root inode
+static struct wfs_inode *get_root_inode() {
+    return (struct wfs_inode *)((char *)fs_state.disk_maps[0] + fs_state.sb->i_blocks_ptr);
+}
+
+// Helper function to get block pointer
+static void *get_block_ptr(int block_num) {
+    if (block_num < 0 || block_num >= fs_state.sb->num_data_blocks) {
+        return NULL;
+    }
+    return (void *)((char *)fs_state.disk_maps[0] + fs_state.sb->d_blocks_ptr + block_num * BLOCK_SIZE);
+}
+
+// Helper function to sync changes in RAID-1 mode
+static void sync_raid1_changes() {
+    if (fs_state.sb->raid_mode == 1) {
+        for (int i = 1; i < fs_state.num_disks; i++) {
+            memcpy(fs_state.disk_maps[i], fs_state.disk_maps[0], fs_state.disk_size);
+        }
+    }
+}
+
+
 int main(int argc, char *argv[]) {
-    // if (argc < 4) { // Need at least: program_name disk1 mountpoint -s
-    //     fprintf(stderr, "Usage: %s disk1 [disk2 ...] [FUSE options] mountpoint\n", argv[0]);
-    //     return 1;
-    // }
+    if (argc < 4) {
+        fprintf(stderr, "Usage: %s disk1 [disk2 ...] [FUSE options] mountpoint\n", argv[0]);
+        return 1;
+    }
 
     // Count disks and find mount point
     char *disk_paths[16];  // Assuming reasonable maximum
@@ -616,14 +648,17 @@ int main(int argc, char *argv[]) {
             fuse_arg_start = i;
             break;
         }
-        disk_paths[num_disks] = argv[i];
-	    num_disks++;
+        disk_paths[num_disks++] = argv[i];
+    }
+
+    if (num_disks < 2) {
+        fprintf(stderr, "Error: at least 2 disks are required\n");
+        return 1;
     }
 
     // Initialize filesystem
     if (init_fs(disk_paths, num_disks) != 0) {
-        fprintf(stderr, "Failed to initialize filesystem\n");
-        printf("DEBUG: Failed to initialize filesystem\n");
+        // Error message already printed by init_fs
         return 1;
     }
 
@@ -640,7 +675,21 @@ int main(int argc, char *argv[]) {
     }
 
     // Start FUSE
-    return fuse_main(fuse_argc, fuse_argv, &ops, NULL);
+    int ret = fuse_main(fuse_argc, fuse_argv, &ops, NULL);
+
+    // Cleanup
+    for (int i = 0; i < fs_state.num_disks; i++) {
+        if (fs_state.disk_maps[i] != MAP_FAILED) {
+            munmap(fs_state.disk_maps[i], fs_state.disk_size);
+        }
+        if (fs_state.disk_fds[i] != -1) {
+            close(fs_state.disk_fds[i]);
+        }
+    }
+    free(fs_state.disk_maps);
+    free(fs_state.disk_fds);
+
+    return ret;
 }
 
 /*

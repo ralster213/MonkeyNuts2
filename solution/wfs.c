@@ -27,6 +27,7 @@ static int wfs_getattr(const char *path, struct stat *stbuf) {
         stbuf->st_nlink = 2;
         stbuf->st_uid = getuid();
         stbuf->st_gid = getgid();
+        
         return 0;
     }
     

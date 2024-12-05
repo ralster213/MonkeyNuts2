@@ -18,8 +18,18 @@ static int wfs_getattr(const char *path, struct stat *stbuf) {
     // Implementation of getattr function to retrieve file attributes
     // Fill stbuf structure with the attributes of the file/directory indicated by path
     // ...
-    printf("DEBUG: wfs_getattr!\n");
-    return 0; // Return 0 on success
+    printf("DEBUG: wfs_getattr called for path: %s\n", path);
+    memset(stbuf, 0, sizeof(struct stat));
+    
+    if (strcmp(path, "/") == 0) {
+        stbuf->st_mode = S_IFDIR | 0755;
+        stbuf->st_nlink = 2;
+        stbuf->st_uid = getuid();
+        stbuf->st_gid = getgid();
+        return 0;
+    }
+    
+    return -ENOENT;
 }
 
 static int wfs_unlink(const char* path) {
@@ -82,19 +92,25 @@ static int wfs_write(const char* path, const char *buf, size_t size, off_t offse
     return size;
 }
 
+
 static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi) {
-    /*
+     /*
     *Return one or more directory entries (struct dirent) to the caller. 
     *This is one of the most complex FUSE functions. 
     *It is related to, but not identical to, the readdir(2) and getdents(2) system calls, and the readdir(3) library function. 
     *Because of its complexity, it is described separately below. 
     *Required for essentially any filesystem, since it's what makes ls and a whole bunch of other things work.
     */
-
-   // return -EBADF if the file handle is invalid, or -ENOENT if you use the path argument and the path doesn't exist
-   printf("DEBUG: wfs_readdir!\n");
-   //struct wfs_dentry *directory = wfs_dentry("getNameFromArgs?", 2);
-   //return directory;
+  // return -EBADF if the file handle is invalid, or -ENOENT if you use the path argument and the path doesn't exist
+    printf("DEBUG: wfs_readdir called for path: %s\n", path);
+    
+    if (strcmp(path, "/") != 0)
+        return -ENOENT;
+    
+    filler(buf, ".", NULL, 0);
+    filler(buf, "..", NULL, 0);
+    //struct wfs_dentry *directory = wfs_dentry("getNameFromArgs?", 2);
+    //return directory;
     return 0;
 }
 

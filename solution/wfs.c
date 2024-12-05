@@ -90,7 +90,7 @@ static int wfs_read(const char* path, char *buf, size_t size, off_t offset, stru
     return bytes_transfered;
 }
 
-static int wfs_write(const char* path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi) {
+static int wfs_write(const char* path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi) {
     // As for read above, except that it can't return 0.
     printf("DEBUG: wfs_write!\n");
     //size_t bytes_transfered = 0;

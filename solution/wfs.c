@@ -52,7 +52,7 @@ static int wfs_rmdir(const char* path) {
 
     //check if path is empty
     
-    }
+    
 
     //need to look at superblock of parent directory
     //find coresponding inode bitmap and datablock bitmap

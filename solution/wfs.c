@@ -15,37 +15,110 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-static int wfs_getattr(const char *path, struct stat *stbuf) {
-    // Implementation of getattr function to retrieve file attributes
-    // Fill stbuf structure with the attributes of the file/directory indicated by path
-    // ...
-    printf("DEBUG 1: wfs_getattr called for path: %s\n", path);
-    memset(stbuf, 0, sizeof(struct stat));
-    
+// Global filesystem state
+static struct {
+    void **disk_maps;        // Array of mmap'd disk pointers
+    int *disk_fds;           // Array of disk file descriptors
+    int num_disks;           // Number of disks in array
+    size_t disk_size;        // Size of each disk
+    struct wfs_sb *sb;       // Pointer to superblock (on first disk)
+} fs_state;
+
+static struct wfs_inode* find_inode_by_path(const char* path) {
     if (strcmp(path, "/") == 0) {
-        stbuf->st_mode = S_IFDIR | 0755;
-        stbuf->st_nlink = 2;
-        stbuf->st_uid = getuid();
-        stbuf->st_gid = getgid();
+        // Root inode is always the first inode
+        return (struct wfs_inode*)((char*)fs_state.disk_maps[0] + fs_state.sb->i_blocks_ptr);
+    }
+
+    // Skip leading slash
+    if (path[0] == '/') path++;
+
+    struct wfs_inode* current = (struct wfs_inode*)((char*)fs_state.disk_maps[0] + fs_state.sb->i_blocks_ptr);
+    char* path_copy = strdup(path);
+    char* component = strtok(path_copy, "/");
+
+    while (component) {
+        int found = 0;
+        // Search through current directory's blocks
+        for (int i = 0; i < D_BLOCK && current->blocks[i]; i++) {
+            struct wfs_dentry* entries = (struct wfs_dentry*)((char*)fs_state.disk_maps[0] + 
+                                        fs_state.sb->d_blocks_ptr + current->blocks[i] * BLOCK_SIZE);
+            int num_entries = BLOCK_SIZE / sizeof(struct wfs_dentry);
+            
+            for (int j = 0; j < num_entries; j++) {
+                if (entries[j].num != 0 && strcmp(entries[j].name, component) == 0) {
+                    current = (struct wfs_inode*)((char*)fs_state.disk_maps[0] + 
+                             fs_state.sb->i_blocks_ptr + entries[j].num * sizeof(struct wfs_inode));
+                    found = 1;
+                    break;
+                }
+            }
+            if (found) break;
+        }
         
-        return 0;
+        if (!found) {
+            free(path_copy);
+            return NULL;
+        }
+        
+        component = strtok(NULL, "/");
     }
-    // Now also handle regular files
-    // DELETE THIS LATER
-    if (path[0] == '/') {  // Make sure it's a valid path
-        printf("DEBUG 2: wfs_getattr called for path[0]: %d\n", path[0]);
-        // For now, pretend any path exists as a regular file
-        // Later we'll properly check if the file exists
-        stbuf->st_mode = S_IFREG | 0666;  // regular file with 644 permissions
-        stbuf->st_nlink = 1;
-        stbuf->st_uid = getuid();
-        stbuf->st_gid = getgid();
-        stbuf->st_size = 0;
-        return 0;
-    }
-    printf("DEBUG 3: wfs_getattr returning -ENOENT (file not found)\n");
-    return -ENOENT;
+    
+    free(path_copy);
+    return current;
 }
+
+static int wfs_getattr(const char *path, struct stat *stbuf) {
+    printf("DEBUG: wfs_getattr called for path: %s\n", path);
+    memset(stbuf, 0, sizeof(struct stat));
+
+    struct wfs_inode* inode = find_inode_by_path(path);
+    if (!inode) {
+        return -ENOENT;
+    }
+
+    stbuf->st_mode = inode->mode;
+    stbuf->st_nlink = inode->nlinks;
+    stbuf->st_uid = inode->uid;
+    stbuf->st_gid = inode->gid;
+    stbuf->st_size = inode->size;
+    stbuf->st_atime = inode->atim;
+    stbuf->st_mtime = inode->mtim;
+    stbuf->st_ctime = inode->ctim;
+
+    return 0;
+}
+// static int wfs_getattr(const char *path, struct stat *stbuf) {
+//     // Implementation of getattr function to retrieve file attributes
+//     // Fill stbuf structure with the attributes of the file/directory indicated by path
+//     // ...
+//     printf("DEBUG 1: wfs_getattr called for path: %s\n", path);
+//     memset(stbuf, 0, sizeof(struct stat));
+    
+//     if (strcmp(path, "/") == 0) {
+//         stbuf->st_mode = S_IFDIR | 0755;
+//         stbuf->st_nlink = 2;
+//         stbuf->st_uid = getuid();
+//         stbuf->st_gid = getgid();
+        
+//         return 0;
+//     }
+//     // Now also handle regular files
+//     // DELETE THIS LATER
+//     if (path[0] == '/') {  // Make sure it's a valid path
+//         printf("DEBUG 2: wfs_getattr called for path[0]: %d\n", path[0]);
+//         // For now, pretend any path exists as a regular file
+//         // Later we'll properly check if the file exists
+//         stbuf->st_mode = S_IFREG | 0666;  // regular file with 644 permissions
+//         stbuf->st_nlink = 1;
+//         stbuf->st_uid = getuid();
+//         stbuf->st_gid = getgid();
+//         stbuf->st_size = 0;
+//         return 0;
+//     }
+//     printf("DEBUG 3: wfs_getattr returning -ENOENT (file not found)\n");
+//     return -ENOENT;
+// }
 
 static int wfs_unlink(const char* path) {
     // Remove (delete) the given file, symbolic link, hard link, or special node
@@ -127,7 +200,7 @@ static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_
 
     // For now, if we created a file, show it
     // Later we'll properly read directory entries
-    filler(buf, "file", NULL, 0);
+    //filler(buf, "file", NULL, 0);
 
     return 0;
 }
@@ -149,16 +222,6 @@ static struct fuse_operations ops = {
 // put all operations in here
 
 //how do we find the disks? We could call ls to list disks
-
-// Global filesystem state
-static struct {
-    void **disk_maps;        // Array of mmap'd disk pointers
-    int *disk_fds;           // Array of disk file descriptors
-    int num_disks;           // Number of disks in array
-    size_t disk_size;        // Size of each disk
-    struct wfs_sb *sb;       // Pointer to superblock (on first disk)
-} fs_state;
-
 // Initialize filesystem
 static int init_fs(char *disk_paths[], int num_disks) {
     fs_state.num_disks = num_disks;

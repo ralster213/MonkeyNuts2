@@ -62,7 +62,7 @@ static int wfs_rmdir(const char* path) {
     return 0; // Return 0 on success
 }
 
-static int wfs_read(const char* path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi) {
+static int wfs_read(const char* path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi) {
     // Read sizebytes from the given file into the buffer buf, beginning offset bytes into the file. See read(2) for full details. 
     // Returns the number of bytes transferred, or 0 if offset was at or beyond the end of the file.
     if (/*offset was at or beyond the end of the file*/1) {
@@ -74,12 +74,12 @@ static int wfs_read(const char* path, char *buf, size_t size, off_t offset, stru
     return bytes_transfered;
 }
 
-static int wfs_write(const char* path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi) {
+static int wfs_write(const char* path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi) {
     // As for read above, except that it can't return 0.
     printf("DEBUG: wfs_write!\n");
     //size_t bytes_transfered = 0;
     //return bytes_transfered;
-    return 0;
+    return size;
 }
 
 static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi) {

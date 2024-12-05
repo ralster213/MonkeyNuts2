@@ -127,9 +127,204 @@ static int wfs_unlink(const char* path) {
     return 0;
 }
 
-static int wfs_mknod(const char* path, mode_t mode, dev_t rdev) {
-    // Make a special (device) file, FIFO, or socket. See mknod(2) for details. 
-    printf("DEBUG: wfs_mknod!\n");
+static int wfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+                      off_t offset, struct fuse_file_info *fi) {
+    printf("DEBUG: wfs_readdir called for path: %s\n", path);
+
+    struct wfs_inode *inode = find_inode_by_path(path);
+    if (!inode) {
+        return -ENOENT;
+    }
+
+    // Check if it's actually a directory
+    if (!S_ISDIR(inode->mode)) {
+        return -ENOTDIR;
+    }
+
+    // Add . and .. entries
+    filler(buf, ".", NULL, 0);
+    filler(buf, "..", NULL, 0);
+
+    // Read through all direct blocks
+    for (int i = 0; i < D_BLOCK && inode->blocks[i]; i++) {
+        struct wfs_dentry *entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
+                                    fs_state.sb->d_blocks_ptr + inode->blocks[i] * BLOCK_SIZE);
+        int num_entries = BLOCK_SIZE / sizeof(struct wfs_dentry);
+
+        for (int j = 0; j < num_entries; j++) {
+            if (entries[j].num != 0) {  // Valid entry
+                if (filler(buf, entries[j].name, NULL, 0)) {
+                    return 0;  // Buffer full
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+// Helper function to find a free inode number
+static int find_free_inode() {
+    char *inode_bitmap = (char *)fs_state.disk_maps[0] + fs_state.sb->i_bitmap_ptr;
+    for (size_t i = 0; i < fs_state.sb->num_inodes; i++) {
+        if (!(inode_bitmap[i / 8] & (1 << (i % 8)))) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Helper function to find a free data block
+static int find_free_block() {
+    char *block_bitmap = (char *)fs_state.disk_maps[0] + fs_state.sb->d_bitmap_ptr;
+    for (size_t i = 0; i < fs_state.sb->num_data_blocks; i++) {
+        if (!(block_bitmap[i / 8] & (1 << (i % 8)))) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Helper function to add directory entry
+static int add_dir_entry(struct wfs_inode *dir, const char *name, int inode_num) {
+    // Find or allocate a data block in the directory
+    int block_idx = -1;
+    int entry_idx = -1;
+    struct wfs_dentry *entries = NULL;
+
+    // Look for space in existing blocks
+    for (int i = 0; i < D_BLOCK && dir->blocks[i]; i++) {
+        entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
+                                      fs_state.sb->d_blocks_ptr + dir->blocks[i] * BLOCK_SIZE);
+        int num_entries = BLOCK_SIZE / sizeof(struct wfs_dentry);
+
+        for (int j = 0; j < num_entries; j++) {
+            if (entries[j].num == 0) {  // Found free entry
+                block_idx = i;
+                entry_idx = j;
+                break;
+            }
+        }
+        if (block_idx != -1) break;
+    }
+
+    // If no space found, allocate new block
+    if (block_idx == -1) {
+        for (int i = 0; i < D_BLOCK; i++) {
+            if (dir->blocks[i] == 0) {
+                int new_block = find_free_block();
+                if (new_block == -1) return -ENOSPC;
+
+                // Mark block as used
+                char *block_bitmap = (char *)fs_state.disk_maps[0] + fs_state.sb->d_bitmap_ptr;
+                block_bitmap[new_block / 8] |= (1 << (new_block % 8));
+
+                dir->blocks[i] = new_block;
+                block_idx = i;
+                entry_idx = 0;
+                entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
+                                              fs_state.sb->d_blocks_ptr + new_block * BLOCK_SIZE);
+                memset(entries, 0, BLOCK_SIZE);  // Initialize new block
+                break;
+            }
+        }
+        if (block_idx == -1) return -ENOSPC;  // No free blocks in directory inode
+    }
+
+    // Add the entry
+    strncpy(entries[entry_idx].name, name, MAX_NAME - 1);
+    entries[entry_idx].name[MAX_NAME - 1] = '\0';
+    entries[entry_idx].num = inode_num;
+
+    // Update directory size if needed
+    size_t new_size = (block_idx + 1) * BLOCK_SIZE;
+    if (new_size > dir->size) {
+        dir->size = new_size;
+    }
+
+    return 0;
+}
+
+static int wfs_mknod(const char *path, mode_t mode, dev_t rdev) {
+    printf("DEBUG: wfs_mknod called for path: %s\n", path);
+
+    // Don't handle special files
+    if (!S_ISREG(mode)) {
+        return -EINVAL;
+    }
+
+    // Get parent directory path and file name
+    char *path_copy = strdup(path);
+    char *last_slash = strrchr(path_copy, '/');
+    if (!last_slash) {
+        free(path_copy);
+        return -EINVAL;
+    }
+
+    char *file_name = last_slash + 1;
+    if (strlen(file_name) >= MAX_NAME) {
+        free(path_copy);
+        return -ENAMETOOLONG;
+    }
+
+    *last_slash = '\0';  // Split path
+    const char *dir_path = (*path_copy == '\0') ? "/" : path_copy;
+
+    // Find parent directory inode
+    struct wfs_inode *dir_inode = find_inode_by_path(dir_path);
+    if (!dir_inode) {
+        free(path_copy);
+        return -ENOENT;
+    }
+
+    // Check if file already exists
+    struct wfs_inode *existing = find_inode_by_path(path);
+    if (existing) {
+        free(path_copy);
+        return -EEXIST;
+    }
+
+    // Find free inode
+    int inode_num = find_free_inode();
+    if (inode_num == -1) {
+        free(path_copy);
+        return -ENOSPC;
+    }
+
+    // Initialize new inode
+    struct wfs_inode *new_inode = (struct wfs_inode *)((char *)fs_state.disk_maps[0] + 
+                                 fs_state.sb->i_blocks_ptr + inode_num * sizeof(struct wfs_inode));
+    new_inode->num = inode_num;
+    new_inode->mode = mode;
+    new_inode->uid = getuid();
+    new_inode->gid = getgid();
+    new_inode->size = 0;
+    new_inode->nlinks = 1;
+    time_t curr_time = time(NULL);
+    new_inode->atim = curr_time;
+    new_inode->mtim = curr_time;
+    new_inode->ctim = curr_time;
+    memset(new_inode->blocks, 0, sizeof(new_inode->blocks));
+
+    // Mark inode as used
+    char *inode_bitmap = (char *)fs_state.disk_maps[0] + fs_state.sb->i_bitmap_ptr;
+    inode_bitmap[inode_num / 8] |= (1 << (inode_num % 8));
+
+    // Add directory entry
+    int ret = add_dir_entry(dir_inode, file_name, inode_num);
+    if (ret < 0) {
+        // Cleanup on failure
+        inode_bitmap[inode_num / 8] &= ~(1 << (inode_num % 8));
+        memset(new_inode, 0, sizeof(struct wfs_inode));
+        free(path_copy);
+        return ret;
+    }
+
+    // Update directory timestamps
+    dir_inode->mtim = curr_time;
+    dir_inode->ctim = curr_time;
+
+    free(path_copy);
     return 0;
 }
 
@@ -181,29 +376,29 @@ static int wfs_write(const char* path, const char *buf, size_t size, off_t offse
 }
 
 
-static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi) {
-     /*
-    *Return one or more directory entries (struct dirent) to the caller. 
-    *This is one of the most complex FUSE functions. 
-    *It is related to, but not identical to, the readdir(2) and getdents(2) system calls, and the readdir(3) library function. 
-    *Because of its complexity, it is described separately below. 
-    *Required for essentially any filesystem, since it's what makes ls and a whole bunch of other things work.
-    */
-  // return -EBADF if the file handle is invalid, or -ENOENT if you use the path argument and the path doesn't exist
-    printf("DEBUG: wfs_readdir called for path: %s\n", path);
+// static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi) {
+//      /*
+//     *Return one or more directory entries (struct dirent) to the caller. 
+//     *This is one of the most complex FUSE functions. 
+//     *It is related to, but not identical to, the readdir(2) and getdents(2) system calls, and the readdir(3) library function. 
+//     *Because of its complexity, it is described separately below. 
+//     *Required for essentially any filesystem, since it's what makes ls and a whole bunch of other things work.
+//     */
+//   // return -EBADF if the file handle is invalid, or -ENOENT if you use the path argument and the path doesn't exist
+//     printf("DEBUG: wfs_readdir called for path: %s\n", path);
     
-    if (strcmp(path, "/") != 0)
-        return -ENOENT;
+//     if (strcmp(path, "/") != 0)
+//         return -ENOENT;
     
-    filler(buf, ".", NULL, 0);
-    filler(buf, "..", NULL, 0);
+//     filler(buf, ".", NULL, 0);
+//     filler(buf, "..", NULL, 0);
 
-    // For now, if we created a file, show it
-    // Later we'll properly read directory entries
-    //filler(buf, "file", NULL, 0);
+//     // For now, if we created a file, show it
+//     // Later we'll properly read directory entries
+//     //filler(buf, "file", NULL, 0);
 
-    return 0;
-}
+//     return 0;
+// }
 
 static struct fuse_operations ops = {
   .getattr = wfs_getattr,

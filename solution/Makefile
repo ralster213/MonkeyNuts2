@@ -18,7 +18,7 @@ clean:
 	rm -rf $(BINS)
 	rm -rf $(BADSTUFF)
 
-fuse-test:
+fuse:
 	mkdir mnt
 	./mkfs -r 0 -d disk1 -d disk2 -i 32 -b 200
 	./wfs disk1 disk2 -f -s mnt

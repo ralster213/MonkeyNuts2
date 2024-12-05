@@ -187,60 +187,66 @@ static int find_free_block() {
 
 // Helper function to add directory entry
 static int add_dir_entry(struct wfs_inode *dir, const char *name, int inode_num) {
-    // Find or allocate a data block in the directory
-    int block_idx = -1;
-    int entry_idx = -1;
-    struct wfs_dentry *entries = NULL;
-
-    // Look for space in existing blocks
+    // First try to find space in existing blocks
     for (int i = 0; i < D_BLOCK && dir->blocks[i]; i++) {
-        entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
-                                      fs_state.sb->d_blocks_ptr + dir->blocks[i] * BLOCK_SIZE);
+        struct wfs_dentry *entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
+                                    fs_state.sb->d_blocks_ptr + dir->blocks[i] * BLOCK_SIZE);
         int num_entries = BLOCK_SIZE / sizeof(struct wfs_dentry);
 
+        // Look for empty entry in existing block
         for (int j = 0; j < num_entries; j++) {
-            if (entries[j].num == 0) {  // Found free entry
-                block_idx = i;
-                entry_idx = j;
-                break;
+            if (entries[j].num == 0) {  // Found empty entry
+                strncpy(entries[j].name, name, MAX_NAME - 1);
+                entries[j].name[MAX_NAME - 1] = '\0';
+                entries[j].num = inode_num;
+                
+                // Update directory size if this entry extends it
+                size_t entry_offset = j * sizeof(struct wfs_dentry);
+                if (entry_offset + sizeof(struct wfs_dentry) > dir->size) {
+                    dir->size = entry_offset + sizeof(struct wfs_dentry);
+                }
+                
+                return 0;
             }
         }
-        if (block_idx != -1) break;
     }
 
-    // If no space found, allocate new block
-    if (block_idx == -1) {
-        for (int i = 0; i < D_BLOCK; i++) {
-            if (dir->blocks[i] == 0) {
-                int new_block = find_free_block();
-                if (new_block == -1) return -ENOSPC;
-
-                // Mark block as used
-                char *block_bitmap = (char *)fs_state.disk_maps[0] + fs_state.sb->d_bitmap_ptr;
-                block_bitmap[new_block / 8] |= (1 << (new_block % 8));
-
-                dir->blocks[i] = new_block;
-                block_idx = i;
-                entry_idx = 0;
-                entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
-                                              fs_state.sb->d_blocks_ptr + new_block * BLOCK_SIZE);
-                memset(entries, 0, BLOCK_SIZE);  // Initialize new block
-                break;
-            }
+    // If we get here, we need a new block
+    int new_block_idx = -1;
+    for (int i = 0; i < D_BLOCK; i++) {
+        if (dir->blocks[i] == 0) {
+            new_block_idx = i;
+            break;
         }
-        if (block_idx == -1) return -ENOSPC;  // No free blocks in directory inode
     }
 
-    // Add the entry
-    strncpy(entries[entry_idx].name, name, MAX_NAME - 1);
-    entries[entry_idx].name[MAX_NAME - 1] = '\0';
-    entries[entry_idx].num = inode_num;
-
-    // Update directory size if needed
-    size_t new_size = (block_idx + 1) * BLOCK_SIZE;
-    if (new_size > dir->size) {
-        dir->size = new_size;
+    if (new_block_idx == -1) {
+        return -ENOSPC;  // No space in directory inode
     }
+
+    int new_block = find_free_block();
+    if (new_block == -1) {
+        return -ENOSPC;
+    }
+
+    // Mark block as used
+    char *block_bitmap = (char *)fs_state.disk_maps[0] + fs_state.sb->d_bitmap_ptr;
+    block_bitmap[new_block / 8] |= (1 << (new_block % 8));
+
+    dir->blocks[new_block_idx] = new_block;
+
+    // Initialize new block
+    struct wfs_dentry *entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
+                                fs_state.sb->d_blocks_ptr + new_block * BLOCK_SIZE);
+    memset(entries, 0, BLOCK_SIZE);
+
+    // Add the entry to the first slot
+    strncpy(entries[0].name, name, MAX_NAME - 1);
+    entries[0].name[MAX_NAME - 1] = '\0';
+    entries[0].num = inode_num;
+
+    // Update directory size
+    dir->size = (new_block_idx + 1) * BLOCK_SIZE;
 
     return 0;
 }

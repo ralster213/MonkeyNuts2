@@ -479,10 +479,10 @@ static int init_fs(char *disk_paths[], int num_disks) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 4) { // Need at least: program_name disk1 mountpoint -s
-        fprintf(stderr, "Usage: %s disk1 [disk2 ...] [FUSE options] mountpoint\n", argv[0]);
-        return 1;
-    }
+    // if (argc < 4) { // Need at least: program_name disk1 mountpoint -s
+    //     fprintf(stderr, "Usage: %s disk1 [disk2 ...] [FUSE options] mountpoint\n", argv[0]);
+    //     return 1;
+    // }
 
     // Count disks and find mount point
     char *disk_paths[16];  // Assuming reasonable maximum

@@ -49,6 +49,30 @@ static int wfs_rmdir(const char* path) {
     // Remove the given directory. This should succeed only if the directory is empty (except for "." and ".."). See rmdir(2) for details.
     // You should free all directory data blocks
     // but you do NOT need to free directory data blocks when unlinking files in a directory
+
+    //check if path is empty
+    struct dirent *entry;
+    DIR *dir = opendir(path);
+    int notEmpty = 0; //0 means it is empty, 1 means it is not empty
+    if(dir) {
+        while ((entry = readdir(dir)) != NULL) {
+            if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+                closedir(dir);
+                notEmpty = 1;
+            }
+        }
+        closedir(dir);
+    }
+
+    if (notEmpty == 1) {
+        printf("Directory is not empty");
+        return 1; //this line may need to change
+    }
+
+    //need to look at superblock of parent directory
+    //find coresponding inode bitmap and datablock bitmap
+    //unallocate both
+    
     printf("DEBUG: wfs_rmdir!\n");
     return 0; // Return 0 on success
 }
@@ -61,17 +85,16 @@ static int wfs_read(const char* path, char *buf, size_t size, off_t offset, stru
         return 0;
     }
     printf("DEBUG: wfs_read outside if statement!\n");
+    size_t bytes_transfered = 0;
+    return bytes_transfered;
+}
+
+static int wfs_write(const char* path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi) {
+    // As for read above, except that it can't return 0.
+    printf("DEBUG: wfs_write!\n");
     //size_t bytes_transfered = 0;
     //return bytes_transfered;
     return 0;
-}
-
-static int wfs_write(const char* path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi) {
-    // As for read above, except that it can't return 0.
-    printf("DEBUG: wfs_write called for path: %s, size: %zu, offset: %ld\n", path, size, offset);
-    //size_t bytes_transfered = 0;
-    //return bytes_transfered;
-    return size;
 }
 
 static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi) {
@@ -91,9 +114,8 @@ static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_
 }
 
 static struct fuse_operations ops = {
-  
-  .mknod   = wfs_mknod,
   .getattr = wfs_getattr,
+  .mknod   = wfs_mknod,
   .mkdir   = wfs_mkdir,
   .unlink  = wfs_unlink,
   .rmdir   = wfs_rmdir,

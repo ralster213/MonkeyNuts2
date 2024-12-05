@@ -503,6 +503,7 @@ int main(int argc, char *argv[]) {
     // Initialize filesystem
     if (init_fs(disk_paths, num_disks) != 0) {
         fprintf(stderr, "Failed to initialize filesystem\n");
+        printf("DEBUG: Failed to initialize filesystem\n");
         return 1;
     }
 

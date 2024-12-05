@@ -329,13 +329,127 @@ static int wfs_mknod(const char *path, mode_t mode, dev_t rdev) {
 }
 
 
-static int wfs_mkdir(const char* path, mode_t mode) {
-    // Create a directory with the given name. 
-    // The directory permissions are encoded in mode. 
-    // See mkdir(2) for details. This function is needed for any reasonable read/write filesystem.
-    printf("DEBUG: wfs_mkdir!\n");
-    return 0; // Success
+// static int wfs_mkdir(const char* path, mode_t mode) {
+//     // Create a directory with the given name. 
+//     // The directory permissions are encoded in mode. 
+//     // See mkdir(2) for details. This function is needed for any reasonable read/write filesystem.
+//     printf("DEBUG: wfs_mkdir!\n");
+//     return 0; // Success
 
+// }
+static int wfs_mkdir(const char* path, mode_t mode) {
+    printf("DEBUG: wfs_mkdir called for path: %s, mode: %o\n", path, mode);
+
+    // Get parent directory path and directory name
+    char *path_copy = strdup(path);
+    char *last_slash = strrchr(path_copy, '/');
+    if (!last_slash) {
+        free(path_copy);
+        return -EINVAL;
+    }
+
+    char *dir_name = last_slash + 1;
+    if (strlen(dir_name) >= MAX_NAME) {
+        free(path_copy);
+        return -ENAMETOOLONG;
+    }
+
+    *last_slash = '\0';  // Split path
+    const char *parent_path = (*path_copy == '\0') ? "/" : path_copy;
+
+    // Find parent directory inode
+    struct wfs_inode *parent_inode = find_inode_by_path(parent_path);
+    if (!parent_inode) {
+        free(path_copy);
+        return -ENOENT;
+    }
+
+    // Check if directory already exists
+    struct wfs_inode *existing = find_inode_by_path(path);
+    if (existing) {
+        free(path_copy);
+        return -EEXIST;
+    }
+
+    // Find free inode
+    int inode_num = find_free_inode();
+    if (inode_num == -1) {
+        free(path_copy);
+        return -ENOSPC;
+    }
+
+    // Find free block for initial directory entries
+    int block_num = find_free_block();
+    if (block_num == -1) {
+        // Cleanup inode allocation
+        char *inode_bitmap = (char *)fs_state.disk_maps[0] + fs_state.sb->i_bitmap_ptr;
+        inode_bitmap[inode_num / 8] &= ~(1 << (inode_num % 8));
+        free(path_copy);
+        return -ENOSPC;
+    }
+
+    // Initialize new directory inode
+    struct wfs_inode *new_inode = (struct wfs_inode *)((char *)fs_state.disk_maps[0] + 
+                                 fs_state.sb->i_blocks_ptr + inode_num * sizeof(struct wfs_inode));
+    new_inode->num = inode_num;
+    new_inode->mode = S_IFDIR | (mode & 0777);  // Set directory flag
+    new_inode->uid = getuid();
+    new_inode->gid = getgid();
+    new_inode->size = BLOCK_SIZE;  // One block for . and .. entries
+    new_inode->nlinks = 2;  // . and .. links
+    time_t curr_time = time(NULL);
+    new_inode->atim = curr_time;
+    new_inode->mtim = curr_time;
+    new_inode->ctim = curr_time;
+    memset(new_inode->blocks, 0, sizeof(new_inode->blocks));
+    new_inode->blocks[0] = block_num;  // Assign first block
+
+    // Mark inode as used
+    char *inode_bitmap = (char *)fs_state.disk_maps[0] + fs_state.sb->i_bitmap_ptr;
+    inode_bitmap[inode_num / 8] |= (1 << (inode_num % 8));
+
+    // Mark block as used
+    char *block_bitmap = (char *)fs_state.disk_maps[0] + fs_state.sb->d_bitmap_ptr;
+    block_bitmap[block_num / 8] |= (1 << (block_num % 8));
+
+    // Initialize directory entries (. and ..)
+    struct wfs_dentry *entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
+                                fs_state.sb->d_blocks_ptr + block_num * BLOCK_SIZE);
+    memset(entries, 0, BLOCK_SIZE);
+
+    // Set up . entry
+    strncpy(entries[0].name, ".", MAX_NAME - 1);
+    entries[0].num = inode_num;
+
+    // Set up .. entry
+    strncpy(entries[1].name, "..", MAX_NAME - 1);
+    entries[1].num = parent_inode->num;
+
+    // Add entry to parent directory
+    int ret = add_dir_entry(parent_inode, dir_name, inode_num);
+    if (ret < 0) {
+        // Cleanup on failure
+        inode_bitmap[inode_num / 8] &= ~(1 << (inode_num % 8));
+        block_bitmap[block_num / 8] &= ~(1 << (block_num % 8));
+        memset(new_inode, 0, sizeof(struct wfs_inode));
+        free(path_copy);
+        return ret;
+    }
+
+    // Update parent directory's link count for ..
+    parent_inode->nlinks++;
+    parent_inode->mtim = curr_time;
+    parent_inode->ctim = curr_time;
+
+    // If we're using RAID-1, mirror to other disks
+    if (fs_state.sb->raid_mode == 1) {
+        for (int i = 1; i < fs_state.num_disks; i++) {
+            memcpy(fs_state.disk_maps[i], fs_state.disk_maps[0], fs_state.disk_size);
+        }
+    }
+
+    free(path_copy);
+    return 0;
 }
 
 static int wfs_rmdir(const char* path) {

@@ -11,7 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <dirent.h>
 #include "wfs.h"
 #include <sys/mman.h>
 
@@ -52,22 +51,7 @@ static int wfs_rmdir(const char* path) {
     // but you do NOT need to free directory data blocks when unlinking files in a directory
 
     //check if path is empty
-    struct dirent *entry;
-    DIR *dir = opendir(path);
-    int notEmpty = 0; //0 means it is empty, 1 means it is not empty
-    if(dir) {
-        while ((entry = readdir(dir)) != NULL) {
-            if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
-                closedir(dir);
-                notEmpty = 1;
-            }
-        }
-        closedir(dir);
-    }
-
-    if (notEmpty == 1) {
-        printf("Directory is not empty");
-        return 1; //this line may need to change
+    
     }
 
     //need to look at superblock of parent directory
@@ -90,12 +74,12 @@ static int wfs_read(const char* path, char *buf, size_t size, off_t offset, stru
     return bytes_transfered;
 }
 
-static int wfs_write(const char* path, const char *buf, size_t size, off_t offset, struct fuse_file_info* fi) {
+static int wfs_write(const char* path, char *buf, size_t size, off_t offset, struct fuse_file_info* fi) {
     // As for read above, except that it can't return 0.
     printf("DEBUG: wfs_write!\n");
     //size_t bytes_transfered = 0;
     //return bytes_transfered;
-    return size;
+    return 0;
 }
 
 static int wfs_readdir(const char* path, void* buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info* fi) {

@@ -294,7 +294,7 @@ static int wfs_mknod(const char *path, mode_t mode, dev_t rdev) {
     new_inode->mode = mode;
     new_inode->uid = getuid();
     new_inode->gid = getgid();
-    new_inode->size = 0;
+    new_inode->size = BLOCK_SIZE;
     new_inode->nlinks = 1;
     time_t curr_time = time(NULL);
     new_inode->atim = curr_time;
@@ -809,8 +809,8 @@ static int init_fs(char *disk_paths[], int num_disks) {
     }
 
     // Get pointer to root inode
-    struct wfs_inode *root_inode = (struct wfs_inode *)((char *)fs_state.disk_maps[0] + 
-                                  fs_state.sb->i_blocks_ptr);
+    struct wfs_inode *root_inode = (struct wfs_inode *)((char *)fs_state.disk_maps[0] + fs_state.sb->i_blocks_ptr);
+    
     
     // Verify root inode setup
     if (root_inode->num != 0 || !S_ISDIR(root_inode->mode)) {
@@ -877,7 +877,7 @@ int main(int argc, char *argv[]) {
     // Initialize filesystem
     if (init_fs(disk_paths, num_disks) != 0) {
         // Error message already printed by init_fs
-        printf("ERROR: init_fs didn't return 0");
+        printf("ERROR: init_fs didn't return 0\n");
         return 1;
     }
 

@@ -294,7 +294,7 @@ static int wfs_mknod(const char *path, mode_t mode, dev_t rdev) {
     new_inode->mode = mode;
     new_inode->uid = getuid();
     new_inode->gid = getgid();
-    new_inode->size = BLOCK_SIZE;
+    new_inode->size = 0; // TODO CHANGE TO 0
     new_inode->nlinks = 1;
     time_t curr_time = time(NULL);
     new_inode->atim = curr_time;

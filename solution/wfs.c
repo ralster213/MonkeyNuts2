@@ -783,14 +783,14 @@ static int init_fs(char *disk_paths[], int num_disks) {
         }
         
         struct stat st;
-        if (fstat(fs_state.disk_fds[i], &st) == -1) {
+        if (fstat(fs_state.disk_fds[i], &st) == -1) { // stores info about files
             perror("Failed to stat disk");
             return -1;
         }
         fs_state.disk_size = st.st_size;
         
         fs_state.disk_maps[i] = mmap(NULL, fs_state.disk_size, 
-                                    PROT_READ | PROT_WRITE, MAP_SHARED,
+                                    PROT_READ | PROT_WRITE, MAP_SHARED, // check piazza for double check
                                     fs_state.disk_fds[i], 0);
         if (fs_state.disk_maps[i] == MAP_FAILED) {
             perror("Failed to mmap disk");
@@ -808,35 +808,35 @@ static int init_fs(char *disk_paths[], int num_disks) {
         return -1;
     }
 
-    // Get pointer to root inode
-    struct wfs_inode *root_inode = (struct wfs_inode *)((char *)fs_state.disk_maps[0] + fs_state.sb->i_blocks_ptr);
-    // printf("fs_state.disk_maps[0] = %p\n", fs_state.disk_maps[0] );
-    // printf("fs_state.sb->i_blocks_ptr = %lu\n", fs_state.sb->i_blocks_ptr);
+//     // Get pointer to root inode
+//     struct wfs_inode *root_inode = (struct wfs_inode *)((char *)fs_state.disk_maps[0] + fs_state.sb->i_blocks_ptr);
+//     // printf("fs_state.disk_maps[0] = %p\n", fs_state.disk_maps[0] );
+//     // printf("fs_state.sb->i_blocks_ptr = %lu\n", fs_state.sb->i_blocks_ptr);
     
     
-    // Verify root inode setup
-    if (root_inode->num != 0 || !S_ISDIR(root_inode->mode)) {
-        fprintf(stderr, "Error: invalid root inode\n");
-        return -1;
-    }
+//     // Verify root inode setup
+//     if (root_inode->num != 0 || !S_ISDIR(root_inode->mode)) {
+//         fprintf(stderr, "Error: invalid root inode\n");
+//         return -1;
+//     }
 
-    //Verify root directory has at least one data block
-    if (root_inode->blocks[0] == 0) {
-        fprintf(stderr, "Root directory data block missing \n");
-        return -1;
-}
+//     //Verify root directory has at least one data block
+//     if (root_inode->blocks[0] == 0) {
+//         fprintf(stderr, "Root directory data block missing \n");
+//         return -1;
+// }
 
 
-    // Get root directory entries
-    struct wfs_dentry *root_entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
-                                     fs_state.sb->d_blocks_ptr + root_inode->blocks[0] * BLOCK_SIZE);
+//     // Get root directory entries
+//     struct wfs_dentry *root_entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
+//                                      fs_state.sb->d_blocks_ptr + root_inode->blocks[0] * BLOCK_SIZE);
 
-    // Verify "." and ".." entries
-    if (strcmp(root_entries[0].name, ".") != 0 || root_entries[0].num != 0 ||
-        strcmp(root_entries[1].name, "..") != 0 || root_entries[1].num != 0) {
-        fprintf(stderr, "Error: invalid root directory entries\n");
-        return -1; // TODO UNCOMMENT THIS
-    }
+//     // Verify "." and ".." entries
+//     if (strcmp(root_entries[0].name, ".") != 0 || root_entries[0].num != 0 ||
+//         strcmp(root_entries[1].name, "..") != 0 || root_entries[1].num != 0) {
+//         fprintf(stderr, "Error: invalid root directory entries\n");
+//         return -1; // TODO UNCOMMENT THIS
+//     }
 
     printf("Filesystem initialized successfully:\n");
     printf("- Number of inodes: %zu\n", fs_state.sb->num_inodes);
@@ -865,7 +865,8 @@ int main(int argc, char *argv[]) {
             fuse_arg_start = i;
             break;
         }
-        disk_paths[num_disks++] = argv[i];
+        disk_paths[num_disks] = argv[i];
+        num_disks++;
     }
 
     if (num_disks < 2) {
@@ -893,21 +894,22 @@ int main(int argc, char *argv[]) {
     }
 
     // Start FUSE
-    int ret = fuse_main(fuse_argc, fuse_argv, &ops, NULL);
+    //int ret = fuse_main(fuse_argc, fuse_argv, &ops, NULL);
 
-    // Cleanup
-    for (int i = 0; i < fs_state.num_disks; i++) {
-        if (fs_state.disk_maps[i] != MAP_FAILED) {
-            munmap(fs_state.disk_maps[i], fs_state.disk_size);
-        }
-        if (fs_state.disk_fds[i] != -1) {
-            close(fs_state.disk_fds[i]);
-        }
-    }
-    free(fs_state.disk_maps);
-    free(fs_state.disk_fds);
+    // // Cleanup
+    // for (int i = 0; i < fs_state.num_disks; i++) {
+    //     if (fs_state.disk_maps[i] != MAP_FAILED) {
+    //         munmap(fs_state.disk_maps[i], fs_state.disk_size);
+    //     }
+    //     if (fs_state.disk_fds[i] != -1) {
+    //         close(fs_state.disk_fds[i]);
+    //     }
+    // }
+    // free(fs_state.disk_maps);
+    // free(fs_state.disk_fds);
 
-    return ret;
+    //return ret;
+    return fuse_main(fuse_argc, fuse_argv, &ops, NULL);
 }
 
 /*

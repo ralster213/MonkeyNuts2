@@ -810,6 +810,8 @@ static int init_fs(char *disk_paths[], int num_disks) {
 
     // Get pointer to root inode
     struct wfs_inode *root_inode = (struct wfs_inode *)((char *)fs_state.disk_maps[0] + fs_state.sb->i_blocks_ptr);
+    // printf("fs_state.disk_maps[0] = %p\n", fs_state.disk_maps[0] );
+    // printf("fs_state.sb->i_blocks_ptr = %lu\n", fs_state.sb->i_blocks_ptr);
     
     
     // Verify root inode setup
@@ -819,14 +821,22 @@ static int init_fs(char *disk_paths[], int num_disks) {
     }
 
     // Verify root directory has at least one data block
-    if (root_inode->blocks[0] == 0) {
-        fprintf(stderr, "Error: root directory has no data blocks\n");
-        printf("- Number of inodes: %zu\n", fs_state.sb->num_inodes);
-        printf("- Number of data blocks: %zu\n", fs_state.sb->num_data_blocks);
-        printf("- RAID mode: %d\n", fs_state.sb->raid_mode);
-        printf("- Number of disks: %d\n", fs_state.sb->disk_count);
-        return -1; // UNCOMMENT THIS TODO
-    }
+//     if (root_inode->blocks[0] == 0) {
+//         fprintf(stderr, "Root directory data block missing, repairing...\n");
+//         //root_inode->blocks[0] = allocate_data_block();
+//         struct wfs_dentry *entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] +
+//                                     fs_state.sb->d_blocks_ptr + root_inode->blocks[0] * BLOCK_SIZE);
+
+//         strcpy(entries[0].name, ".");
+//         entries[0].num = 0; // Root inode points to itself
+
+//         strcpy(entries[1].name, "..");
+//         entries[1].num = 0; // Parent of root is itself
+
+//         root_inode->size = sizeof(struct wfs_dentry) * 2;
+//         root_inode->nlinks = 2;
+// }
+
 
     // Get root directory entries
     struct wfs_dentry *root_entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 

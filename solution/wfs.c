@@ -820,22 +820,11 @@ static int init_fs(char *disk_paths[], int num_disks) {
         return -1;
     }
 
-    // Verify root directory has at least one data block
-//     if (root_inode->blocks[0] == 0) {
-//         fprintf(stderr, "Root directory data block missing, repairing...\n");
-//         //root_inode->blocks[0] = allocate_data_block();
-//         struct wfs_dentry *entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] +
-//                                     fs_state.sb->d_blocks_ptr + root_inode->blocks[0] * BLOCK_SIZE);
-
-//         strcpy(entries[0].name, ".");
-//         entries[0].num = 0; // Root inode points to itself
-
-//         strcpy(entries[1].name, "..");
-//         entries[1].num = 0; // Parent of root is itself
-
-//         root_inode->size = sizeof(struct wfs_dentry) * 2;
-//         root_inode->nlinks = 2;
-// }
+    //Verify root directory has at least one data block
+    if (root_inode->blocks[0] == 0) {
+        fprintf(stderr, "Root directory data block missing \n");
+        return -1;
+}
 
 
     // Get root directory entries

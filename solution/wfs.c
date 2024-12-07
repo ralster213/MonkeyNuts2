@@ -243,9 +243,14 @@ static int add_dir_entry(struct wfs_inode *dir, const char *name, int inode_num)
 
 static int wfs_mknod(const char *path, mode_t mode, dev_t rdev) {
     printf("DEBUG: wfs_mknod called for path: %s\n", path);
+    printf("DEBUG: Superblock info:\n");
+    printf("- num_inodes: %zu\n", fs_state.sb->num_inodes);
+    printf("- num_data_blocks: %zu\n", fs_state.sb->num_data_blocks);
+    printf("- i_bitmap_ptr: %lu\n", fs_state.sb->i_bitmap_ptr);
 
     // Don't handle special files
     if (!S_ISREG(mode)) {
+        printf("ERROR: returning -EINVAL");
         return -EINVAL;
     }
 
@@ -452,7 +457,6 @@ static int wfs_rmdir(const char* path) {
     //need to look at superblock of parent directory
     //find coresponding inode bitmap and datablock bitmap
     //unallocate both
-    
     printf("DEBUG: wfs_rmdir!\n");
     return 0; // Return 0 on success
 }

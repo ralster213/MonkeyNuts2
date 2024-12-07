@@ -843,6 +843,7 @@ static int init_fs(char *disk_paths[], int num_disks) {
     printf("- Number of data blocks: %zu\n", fs_state.sb->num_data_blocks);
     printf("- RAID mode: %d\n", fs_state.sb->raid_mode);
     printf("- Number of disks: %d\n", fs_state.sb->disk_count);
+    printf(" disk size %i \n", fs_state.disk_size);
 
     return 0;
 }

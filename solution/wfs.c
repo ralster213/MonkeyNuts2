@@ -33,6 +33,7 @@ static struct wfs_inode *get_root_inode() {
 // Helper function to get block pointer
 static void *get_block_ptr(int block_num) {
     if (block_num < 0 || block_num >= fs_state.sb->num_data_blocks) {
+        printf("ERROR: get_block_ptr either block_num: %i < 0, OR block_num: %i >= fs_state.sb->num_data_blocks: %li\n", block_num, block_num, fs_state.sb->num_data_blocks);
         return NULL;
     }
     return (void *)((char *)fs_state.disk_maps[0] + fs_state.sb->d_blocks_ptr + block_num * BLOCK_SIZE);
@@ -93,15 +94,23 @@ static struct wfs_inode* find_inode_by_path(const char* path) {
 }
 
 static int wfs_getattr(const char *path, struct stat *stbuf) {
+    
     printf("DEBUG: wfs_getattr called for path: %s\n", path);
+    
     memset(stbuf, 0, sizeof(struct stat));
-
     struct wfs_inode* inode = find_inode_by_path(path);
+    
     if (!inode) {
+        printf("ERROR: wfs_getattr returned -ENOENT: %s\n", path);
         return -ENOENT;
     }
-
-    stbuf->st_mode = inode->mode;
+    
+    if (!strcmp(path, "/")) {
+        printf("DEBUG: isdir\n");
+        stbuf->st_mode = inode->mode | S_IFDIR;
+    } else {
+        stbuf->st_mode = inode->mode | S_IFREG;
+    }
     stbuf->st_nlink = inode->nlinks;
     stbuf->st_uid = inode->uid;
     stbuf->st_gid = inode->gid;
@@ -111,6 +120,8 @@ static int wfs_getattr(const char *path, struct stat *stbuf) {
     stbuf->st_ctime = inode->ctim;
 
     return 0;
+    
+
 }
 // static int wfs_getattr(const char *path, struct stat *stbuf) {
 //     // Implementation of getattr function to retrieve file attributes
@@ -157,32 +168,30 @@ static int wfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
     struct wfs_inode *inode = find_inode_by_path(path);
     if (!inode) {
+        printf("ERROR: wfs_readdir- No such file or directory\n");
         return -ENOENT;
     }
 
     // Check if it's actually a directory
     if (!S_ISDIR(inode->mode)) {
+        printf("ERROR: Not a directory\n");
         return -ENOTDIR;
     }
 
-    // Add . and .. entries
-    filler(buf, ".", NULL, 0);
-    filler(buf, "..", NULL, 0);
-
     // Read through all direct blocks
-    for (int i = 0; i < D_BLOCK && inode->blocks[i]; i++) {
-        struct wfs_dentry *entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
-                                    fs_state.sb->d_blocks_ptr + inode->blocks[i] * BLOCK_SIZE);
-        int num_entries = BLOCK_SIZE / sizeof(struct wfs_dentry);
+    // for (int i = 0; i < D_BLOCK && inode->blocks[i]; i++) {
+    //     struct wfs_dentry *entries = (struct wfs_dentry *)((char *)fs_state.disk_maps[0] + 
+    //                                 fs_state.sb->d_blocks_ptr + inode->blocks[i] * BLOCK_SIZE);
+    //     int num_entries = BLOCK_SIZE / sizeof(struct wfs_dentry);
 
-        for (int j = 0; j < num_entries; j++) {
-            if (entries[j].num != 0) {  // Valid entry
-                if (filler(buf, entries[j].name, NULL, 0)) {
-                    return 0;  // Buffer full
-                }
-            }
-        }
-    }
+    //     for (int j = 0; j < num_entries; j++) {
+    //         if (entries[j].num != 0) {  // Valid entry
+    //             if (filler(buf, entries[j].name, NULL, 0)) {
+    //                 return 0;  // Buffer full
+    //             }
+    //         }
+    //     }
+    // }
 
     return 0;
 }
@@ -213,10 +222,12 @@ static int find_free_block() {
 static int add_dir_entry(struct wfs_inode *dir, const char *name, int inode_num) {
     // Only use existing blocks - we should never need to allocate new ones
     // since the root directory is pre-allocated with enough space
-    for (int i = 0; i < D_BLOCK && dir->blocks[i]; i++) {
+    for (int i = 0; i < /*D_BLOCK && */ dir->blocks[i]; i++) {
         struct wfs_dentry *entries = get_block_ptr(dir->blocks[i]);
-        if (!entries) return -EIO;
-
+        if (!entries) {
+            printf("ERROR: add_dir_entry called get_block_ptr with %lu and got !entries. Returned I/O Error (-EIO)\n", dir->blocks[i]);
+            return -EIO;
+        }
         int num_entries = BLOCK_SIZE / sizeof(struct wfs_dentry);
         for (int j = 0; j < num_entries; j++) {
             if (entries[j].num == 0) {  // Found empty entry
@@ -237,6 +248,7 @@ static int add_dir_entry(struct wfs_inode *dir, const char *name, int inode_num)
     }
 
     // If we get here, the existing blocks are full
+    printf("ERROR: add_dir_entry- existing blocks are full \n");
     return -ENOSPC;
 }
 
@@ -259,6 +271,7 @@ static int wfs_mknod(const char *path, mode_t mode, dev_t rdev) {
     char *last_slash = strrchr(path_copy, '/');
     if (!last_slash) {
         free(path_copy);
+        printf("ERROR: wfs_mknod- unable to get parent directory path and file name\n");
         return -EINVAL;
     }
 
@@ -275,6 +288,7 @@ static int wfs_mknod(const char *path, mode_t mode, dev_t rdev) {
     struct wfs_inode *dir_inode = find_inode_by_path(dir_path);
     if (!dir_inode) {
         free(path_copy);
+        printf("ERROR: wfs_mknod- Unable to find parent directory inode. returning -ENOENT\n");
         return -ENOENT;
     }
 
@@ -282,6 +296,7 @@ static int wfs_mknod(const char *path, mode_t mode, dev_t rdev) {
     struct wfs_inode *existing = find_inode_by_path(path);
     if (existing) {
         free(path_copy);
+        printf("ERROR: wfs_mknod- File already exists. returning -EEXIST\n");
         return -EEXIST;
     }
 
@@ -289,6 +304,7 @@ static int wfs_mknod(const char *path, mode_t mode, dev_t rdev) {
     int inode_num = find_free_inode();
     if (inode_num == -1) {
         free(path_copy);
+        printf("ERROR: wfs_mknod- Unable to find free inode. returning -ENOSPC\n");
         return -ENOSPC;
     }
 
@@ -318,6 +334,7 @@ static int wfs_mknod(const char *path, mode_t mode, dev_t rdev) {
         inode_bitmap[inode_num / 8] &= ~(1 << (inode_num % 8));
         memset(new_inode, 0, sizeof(struct wfs_inode));
         free(path_copy);
+        printf("ERROR: wfs_mknod- add_dir_entry encountered error. returning -EEXIST\n");
         return ret;
     }
 
@@ -440,7 +457,8 @@ static int wfs_mkdir(const char* path, mode_t mode) {
     parent_inode->mtim = curr_time;
     parent_inode->ctim = curr_time;
 
-    sync_raid1_changes();
+    printf("TODO: sync raid1 changes\n");
+    //sync_raid1_changes();
     free(path_copy);
     return 0;
 }
@@ -561,6 +579,7 @@ static int wfs_read(const char* path, char *buf, size_t size, off_t offset,
             int indirect_index = block_index - D_BLOCK;
             
             if (indirect_block[indirect_index] == 0) {
+                printf("ERROR: wfs_read- hit a hole in the indirect file\n");
                 break;  // Hit a hole in the file
             }
             
@@ -586,7 +605,8 @@ static int wfs_read(const char* path, char *buf, size_t size, off_t offset,
     // Update access time
     inode->atim = time(NULL);
     if (fs_state.sb->raid_mode == 1) {
-        sync_raid1_changes();
+        printf("TODO: sync raid1 changes\n");
+        //sync_raid1_changes();
     }
 
     return bytes_read;
@@ -599,6 +619,7 @@ static int wfs_write(const char* path, const char *buf, size_t size, off_t offse
 
     struct wfs_inode *inode = find_inode_by_path(path);
     if (!inode) {
+        printf("ERROR: wfs_write- unable to find inode by path\n");
         return -ENOENT;
     }
 
@@ -703,7 +724,8 @@ static int wfs_write(const char* path, const char *buf, size_t size, off_t offse
     inode->ctim = curr_time;
 
     if (fs_state.sb->raid_mode == 1) {
-        sync_raid1_changes();
+        printf("TODO: sync raid 1 changes\n");
+        //sync_raid1_changes();
     }
 
     return bytes_written;
@@ -793,7 +815,7 @@ static int init_fs(char *disk_paths[], int num_disks) {
         }
         fs_state.disk_size = st.st_size;
         
-        fs_state.disk_maps[i] = mmap(NULL, fs_state.disk_size, 
+        fs_state.disk_maps[i] = mmap(NULL, fs_state.disk_size,  // change to fopen fwrite instead of mmap. TODO
                                     PROT_READ | PROT_WRITE, MAP_SHARED, // check piazza for double check
                                     fs_state.disk_fds[i], 0);
         if (fs_state.disk_maps[i] == MAP_FAILED) {

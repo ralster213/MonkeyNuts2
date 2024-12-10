@@ -1,5 +1,5 @@
 BINS = wfs mkfs
-BADSTUFF = disk1 disk2 mnt
+BADSTUFF = disk1 disk2 mnt/
 CC = gcc
 CFLAGS = -Wall -Werror -pedantic -std=gnu18 -g
 FUSE_CFLAGS = `pkg-config fuse --cflags --libs`

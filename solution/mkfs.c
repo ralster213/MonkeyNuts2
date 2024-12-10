@@ -57,11 +57,11 @@ int main(int argc, char *argv[]) {
             block_count = atoi(argv[++i]);
         }
     }
-    // printf("DEBUG: Parsed arguments:\n");
-    // printf("inode_count: %d\n", inode_count);
-    // printf("raid_mode: %d\n", raid_mode);
-    // printf("disk_count: %d\n", disk_count);
-    // printf("block_count: %d\n", block_count);
+    printf("DEBUG: Parsed arguments:\n");
+    printf("inode_count: %d\n", inode_count);
+    printf("raid_mode: %d\n", raid_mode);
+    printf("disk_count: %d\n", disk_count);
+    printf("block_count: %d\n", block_count);
 
     if(raid_mode == -1  || disk_count < 2 || inode_count <= 0 || block_count <= 0) {
         //printf("ERROR: arguments are not valid");
